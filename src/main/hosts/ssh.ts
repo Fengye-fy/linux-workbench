@@ -249,14 +249,14 @@ export class SshHost implements Host {
     }
   }
 
-  openShell({ cols, rows, cwd, agent }: ShellOptions): ShellHandle {
+  openShell({ cols, rows, cwd, agent, agentArgs }: ShellOptions): ShellHandle {
     const shell = new SshShell(cols, rows)
     const start = async (): Promise<void> => {
       try {
         const conn = await this.connect(shell)
         shell.expectShell()
         conn.exec(
-          shellLaunchScript({ cwd, agent, pathPrefix: testPathPrefix() }),
+          shellLaunchScript({ cwd, agent, agentArgs, pathPrefix: testPathPrefix() }),
           { pty: { term: 'xterm-256color', cols: shell.cols, rows: shell.rows } },
           (err, ch) => (err ? void shell.offerRetry(`打开终端失败：${err.message}`) : shell.attach(ch))
         )

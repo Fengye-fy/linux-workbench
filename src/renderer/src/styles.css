@@ -572,6 +572,45 @@ select {
   display: none;
 }
 
+.agent-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 面板顶部：主机、工作目录、整体操作 */
+.agent-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px 0 10px;
+  border-radius: 10px;
+  color: var(--subtext);
+  font-size: 0.85em;
+}
+
+.agent-dir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--overlay);
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分身的平铺区 */
+.agent-tiles {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
 .agent-resizer {
   position: absolute;
   top: 0;
@@ -590,13 +629,6 @@ select {
   gap: 12px;
   padding: 22px;
   color: var(--subtext);
-}
-
-.agent-host-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.9em;
 }
 
 .agent-empty h3 {

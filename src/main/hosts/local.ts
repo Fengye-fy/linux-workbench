@@ -14,9 +14,9 @@ export class LocalHost implements Host {
     return { id: 'local', kind: 'local', name: '本机', detail: hostname(), status: 'connected' }
   }
 
-  openShell({ cols, rows, cwd, agent }: ShellOptions): ShellHandle {
+  openShell({ cols, rows, cwd, agent, agentArgs }: ShellOptions): ShellHandle {
     const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' }
-    return new PtyShell('/bin/sh', ['-c', shellLaunchScript({ cwd, agent, pathPrefix: testPathPrefix() })], {
+    return new PtyShell('/bin/sh', ['-c', shellLaunchScript({ cwd, agent, agentArgs, pathPrefix: testPathPrefix() })], {
       cols,
       rows,
       env

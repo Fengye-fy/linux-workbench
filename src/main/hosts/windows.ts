@@ -87,8 +87,9 @@ export class WindowsHost implements Host {
     return { id: 'windows', kind: 'windows', name: '本机', detail: ps, status: 'connected' }
   }
 
-  openShell({ cols, rows, cwd, agent }: ShellOptions): ShellHandle {
-    return new PsShell(this.shellExe, psLaunchScript({ cwd, agent, pathPrefix: testWinPathPrefix() }), { cols, rows, cwd })
+  openShell({ cols, rows, cwd, agent, agentArgs }: ShellOptions): ShellHandle {
+    const script = psLaunchScript({ cwd, agent, agentArgs, pathPrefix: testWinPathPrefix() })
+    return new PsShell(this.shellExe, script, { cols, rows, cwd })
   }
 
   exec(script: string): Promise<ExecResult> {

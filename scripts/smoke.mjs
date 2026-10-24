@@ -29,7 +29,7 @@ const root = wsl(String.raw`root=$(mktemp -d /tmp/wb-smoke-XXXXXX)
 mkdir -p "$root/it's src/pkg" "$root/bin"
 printf '# notes\n' > "$root/notes.md"
 for n in claude codex; do
-  printf '#!/bin/sh\necho "FAKE-%s cwd=$PWD"\nwhile IFS= read -r line; do echo "got:$line"; done\n' "$(echo $n | tr a-z A-Z)" > "$root/bin/$n"
+  printf '#!/bin/sh\necho "FAKE-%s cwd=$PWD args=$*"\nwhile IFS= read -r line; do echo "got:$line"; done\n' "$(echo $n | tr a-z A-Z)" > "$root/bin/$n"
   chmod +x "$root/bin/$n"
 done
 printf '%s' "$root"`)
@@ -40,7 +40,7 @@ const dataDir = mkdtempSync(join(tmpdir(), 'wb-smoke-data-'))
 const winBin = mkdtempSync(join(tmpdir(), 'wb-smoke-bin-'))
 writeFileSync(
   join(winBin, 'claude.cmd'),
-  ['@echo off', 'echo FAKE-WIN-CLAUDE %CD%', 'set /p line=', 'echo got:%line%', ''].join('\r\n')
+  ['@echo off', 'echo FAKE-WIN-CLAUDE %CD% args=%*', 'set /p line=', 'echo got:%line%', ''].join('\r\n')
 )
 const shot = process.argv[2] ?? 'out/smoke.png'
 const sideShot = (name) => shot.replace(/(\.png)?$/, `-${name}.png`)
@@ -67,32 +67,42 @@ let server = null
 const step = (name) => console.log(`✓ ${name}`)
 const norm = (s) => (s ?? '').replace(/ /g, ' ')
 const rowsText = (i) =>
-  page.evaluate((i) => (document.querySelectorAll('.tile .xterm-rows')[i]?.textContent ?? '').replace(/ /g, ' '), i)
+  page.evaluate((i) => (document.querySelectorAll('.terminal-area .tile .xterm-rows')[i]?.textContent ?? '').replace(/ /g, ' '), i)
 const paneHas = (i, text, timeout = 15000) =>
   page.waitForFunction(
-    ([i, t]) => (document.querySelectorAll('.tile .xterm-rows')[i]?.textContent ?? '').replace(/ /g, ' ').includes(t),
+    ([i, t]) => (document.querySelectorAll('.terminal-area .tile .xterm-rows')[i]?.textContent ?? '').replace(/ /g, ' ').includes(t),
     [i, text],
     { timeout }
   )
+// agent 面板里可能有好几个分身，在所有分身里找
+const agentText = () =>
+  page.evaluate(() => [...document.querySelectorAll('.agent-panel .xterm-rows')].map((r) => r.textContent).join('\n'))
 const agentHas = (text) =>
   page.waitForFunction(
-    (t) => (document.querySelector('.agent-panel .xterm-rows')?.textContent ?? '').replace(/ /g, ' ').includes(t),
+    (t) =>
+      [...document.querySelectorAll('.agent-panel .xterm-rows')].some((r) =>
+        r.textContent.replace(/\u00a0/g, ' ').includes(t)
+      ),
     text,
     { timeout: 20000 }
   )
+const agentCount = (n) =>
+  page.waitForFunction((n) => document.querySelectorAll('.agent-panel .tile:not(.leaving)').length === n, n, {
+    timeout: 10000
+  })
 const headerHas = (i, text) =>
   page.waitForFunction(
-    ([i, t]) => document.querySelectorAll('.tile .pane-title')[i]?.textContent.includes(t),
+    ([i, t]) => document.querySelectorAll('.terminal-area .tile .pane-title')[i]?.textContent.includes(t),
     [i, text],
     { timeout: 15000 }
   )
 const paneCount = (n) =>
-  page.waitForFunction((n) => document.querySelectorAll('.tile:not(.leaving)').length === n, n, { timeout: 8000 })
+  page.waitForFunction((n) => document.querySelectorAll('.terminal-area .tile:not(.leaving)').length === n, n, { timeout: 8000 })
 const focusedIndex = () =>
-  page.evaluate(() => [...document.querySelectorAll('.tile:not(.leaving)')].findIndex((t) => t.querySelector('.pane.focused')))
+  page.evaluate(() => [...document.querySelectorAll('.terminal-area .tile:not(.leaving)')].findIndex((t) => t.querySelector('.pane.focused')))
 const tileOfHost = (name) =>
   page.evaluate(
-    (name) => [...document.querySelectorAll('.tile:not(.leaving)')].findIndex((t) => t.querySelector('.pane-host')?.textContent === name),
+    (name) => [...document.querySelectorAll('.terminal-area .tile:not(.leaving)')].findIndex((t) => t.querySelector('.pane-host')?.textContent === name),
     name
   )
 const run = async (cmd) => {
@@ -108,25 +118,25 @@ const ptyCols = async (i) => {
   const m = `C${++marker}`
   await run(`echo ${m}=$(tput cols)=`)
   await page.waitForFunction(
-    ([i, m]) => new RegExp(`${m}=\\d+=`).test(document.querySelectorAll('.tile .xterm-rows')[i]?.textContent ?? ''),
+    ([i, m]) => new RegExp(`${m}=\\d+=`).test(document.querySelectorAll('.terminal-area .tile .xterm-rows')[i]?.textContent ?? ''),
     [i, m],
     { timeout: 10000 }
   )
   return Number((await rowsText(i)).match(new RegExp(`${m}=(\\d+)=`))[1])
 }
-const termFontSize = () => page.evaluate(() => getComputedStyle(document.querySelector('.tile .xterm-rows')).fontSize)
+const termFontSize = () => page.evaluate(() => getComputedStyle(document.querySelector('.terminal-area .tile .xterm-rows')).fontSize)
 const dirRow = (name) => page.locator('.tree-row.dir', { has: page.locator('.name', { hasText: new RegExp(`^${name}$`) }) })
 
 try {
   // —— 启动 ——
-  await page.waitForFunction(() => document.querySelector('.tile .xterm-rows')?.textContent.includes('$'), null, {
+  await page.waitForFunction(() => document.querySelector('.terminal-area .tile .xterm-rows')?.textContent.includes('$'), null, {
     timeout: 40000
   })
   assert.equal(await page.locator('.host-chip.on .host-name').textContent(), DISTRO)
   await page.waitForSelector(`.explorer-root:has-text("${root}")`)
   assert.ok(!(await rowsText(0)).includes('localhost proxy'), 'wsl.exe 的代理警告不应出现在终端里')
   assert.equal(
-    await page.evaluate(() => getComputedStyle(document.querySelector('.tile .xterm-viewport')).backgroundColor),
+    await page.evaluate(() => getComputedStyle(document.querySelector('.terminal-area .tile .xterm-viewport')).backgroundColor),
     'rgba(0, 0, 0, 0)',
     '终端背景应该透明'
   )
@@ -135,13 +145,37 @@ try {
   // —— agent 面板 ——
   await agentHas(`FAKE-CLAUDE cwd=${root}`)
   assert.deepEqual(await page.locator('.agent-panel .seg-btn').allTextContents(), ['claude', 'codex'])
-  assert.ok(await page.evaluate(() => document.activeElement?.closest('.tile') !== null), 'agent 后台启动不应抢焦点')
+  assert.ok(await page.evaluate(() => document.activeElement?.closest('.terminal-area .tile') !== null), 'agent 后台启动不应抢焦点')
   step('在 WSL 上检测到 claude、codex，claude 在根目录后台启动，不抢焦点')
 
   await page.dragAndDrop('.tree-row.file:has-text("notes.md")', '.agent-panel .term-host')
   await page.keyboard.press('Enter')
   await agentHas('got:@notes.md')
   step('从资源管理器拖文件进 agent：插入 @相对路径')
+
+  await page.click('.agent-panel .pane-actions button[title^="分身"]')
+  await agentCount(2)
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll('.agent-panel .xterm-rows')].filter((r) => r.textContent.includes('FAKE-CLAUDE'))
+        .length === 2,
+    null,
+    { timeout: 20000 }
+  )
+  step('agent 分身：把 agent 面板一分为二，新分身里又启动了一个 claude')
+
+  await run('/fork')
+  await agentCount(3)
+  await agentHas('args=--continue --fork-session')
+  assert.equal(await page.locator('.agent-panel .pane-label:has-text("分叉")').count(), 1)
+  assert.ok(!(await agentText()).includes('got:/fork'), '/fork 不应该发给原来的 claude')
+  step('在 claude 里敲 /fork：开一个分叉当前对话的分身（claude --continue --fork-session），原分身收不到这行')
+
+  await page.keyboard.press('Control+Shift+W')
+  await agentCount(2)
+  await page.keyboard.press('Control+Shift+W')
+  await agentCount(1)
+  step('焦点在 agent 上时 Ctrl+Shift+W 逐个关掉分身')
 
   await dirRow(tricky).dblclick()
   await page.waitForSelector('.toast:has-text("claude")', { timeout: 6000 })
@@ -189,19 +223,19 @@ try {
 
   await page.keyboard.press('Control+Shift+A')
   await page.waitForSelector('.agent-panel', { state: 'hidden' })
-  await page.click('.tile .term-host')
+  await page.click('.terminal-area .tile .term-host')
   assert.equal(await termFontSize(), '15px')
   await page.keyboard.press('Control+Equal')
-  await page.waitForFunction(() => getComputedStyle(document.querySelector('.tile .xterm-rows')).fontSize === '16px')
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.terminal-area .tile .xterm-rows')).fontSize === '16px')
   await page.keyboard.press('Control+Digit0')
-  await page.waitForFunction(() => getComputedStyle(document.querySelector('.tile .xterm-rows')).fontSize === '15px')
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.terminal-area .tile .xterm-rows')).fontSize === '15px')
   step('终端默认 15px（16 寸屏），Ctrl+= 放大、Ctrl+0 还原')
 
   // —— 平铺终端（WSL）——
   await run('echo hello-$((6*7))')
   await paneHas(0, 'hello-42')
   await page.keyboard.type('echo ')
-  await page.dragAndDrop(`.tree-row.dir:has-text("${tricky}")`, '.tile .term-host')
+  await page.dragAndDrop(`.tree-row.dir:has-text("${tricky}")`, '.terminal-area .tile .term-host')
   await page.keyboard.press('Enter')
   await paneHas(0, `${root}/${tricky}`)
   step('终端执行命令；拖文件夹进 shell 插入加了引号的路径')
@@ -232,23 +266,23 @@ try {
   assert.equal(await focusedIndex(), 1)
   await headerHas(1, tricky)
   await settle()
-  const [a, b] = [await box('.tile', 0), await box('.tile', 1)]
+  const [a, b] = [await box('.terminal-area .tile', 0), await box('.terminal-area .tile', 1)]
   assert.ok(b.x > a.x + a.width / 2 && Math.abs(a.y - b.y) < 2, '宽窗口应左右拆分')
   step('Ctrl+Shift+Enter 拆分：左右并排，新终端获得焦点并继承目录')
 
   await dirRow('pkg').dblclick()
   await headerHas(1, `${tricky}/pkg`)
-  assert.ok(!(await page.locator('.tile .pane-title').nth(0).textContent()).includes('pkg'))
+  assert.ok(!(await page.locator('.terminal-area .tile .pane-title').nth(0).textContent()).includes('pkg'))
   step('双击 cd 只作用在焦点终端')
 
   const colsBefore = await ptyCols(1)
-  const d = await box('.divider')
+  const d = await box('.terminal-area .divider')
   await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2)
   await page.mouse.down()
   await page.mouse.move(d.x + d.width / 2 + 200, d.y + d.height / 2, { steps: 8 })
   await page.mouse.up()
   await settle()
-  const [a2, b2] = [await box('.tile', 0), await box('.tile', 1)]
+  const [a2, b2] = [await box('.terminal-area .tile', 0), await box('.terminal-area .tile', 1)]
   assert.ok(a2.width - b2.width > 300, `拖动后宽度没变：${a2.width} / ${b2.width}`)
   assert.equal(await focusedIndex(), 1, '拖动分隔条不应改变焦点')
   const colsAfter = await ptyCols(1)
@@ -258,7 +292,7 @@ try {
   await page.keyboard.press('Control+Shift+Enter')
   await paneCount(3)
   await settle()
-  const [t1, t2] = [await box('.tile', 1), await box('.tile', 2)]
+  const [t1, t2] = [await box('.terminal-area .tile', 1), await box('.terminal-area .tile', 2)]
   assert.ok(t2.y > t1.y + t1.height / 2 && Math.abs(t1.x - t2.x) < 2, '窄高的窗格应上下拆分')
   assert.ok(!(await rowsText(0)).includes('localhost proxy'), '改变尺寸后 wsl.exe 的警告不应被 ConPTY 重绘出来')
   step('再拆一次：窄高的窗格改为上下拆分；改变尺寸后 wsl.exe 的警告也没有回来')
@@ -270,7 +304,7 @@ try {
   await run('exit')
   await paneCount(1)
   await settle()
-  const [full, tiles] = [await box('.tile', 0), await box('.tiles')]
+  const [full, tiles] = [await box('.terminal-area .tile', 0), await box('.terminal-area .tiles')]
   assert.ok(full.width > tiles.width - 2, '剩下的终端应占满')
   step('Ctrl+Shift+W 关闭、shell 里 exit 关闭，焦点交给旁边的终端，剩下的占满')
 
@@ -306,8 +340,19 @@ try {
   await run('hi-win')
   await agentHas('got:hi-win')
   step('agent 面板选"本机"：在 Windows 上检测到 claude 并启动')
+
+  // 焦点切到 WSL 终端，资源管理器显示 WSL 的测试目录，再让本机的 agent 换到这个目录启动
+  await page.locator('.terminal-area .tile .pane-header').nth(0).click()
+  await page.waitForSelector(`.explorer-root:has-text("${root}")`)
+  await page.click('.agent-panel button[title="在资源管理器当前目录启动"]')
+  const uncRoot = '\\\\wsl.localhost\\' + DISTRO + root.replace(/\//g, '\\')
+  await page.waitForFunction((p) => document.querySelector('.agent-panel .agent-dir')?.textContent === p, uncRoot)
+  await agentHas('FAKE-WIN-CLAUDE')
+  step(String.raw`本机的 agent 换到 WSL 的目录启动：路径换算成 \\wsl.localhost\…`)
+
   await page.keyboard.press('Control+Shift+A')
   await page.waitForSelector('.agent-panel', { state: 'hidden' })
+  await page.locator('.terminal-area .tile .pane-header').nth(w).click()
   await page.keyboard.press('Control+Shift+W')
   await paneCount(1)
 

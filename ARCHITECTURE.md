@@ -211,6 +211,17 @@ sequenceDiagram
 有选中内容时 Ctrl+C 复制、Ctrl+V 粘贴；只接受**同一台主机**的资源管理器拖来的路径——主机编号编进了
 dataTransfer 的类型名里，因为拖动过程中读不到数据、只能看类型。
 
+### agent 面板
+
+`AgentPanel.tsx` 内部也用同一套二叉分割树和 `TilingView`，每个格子是一个"分身"（跑哪个 agent、是不是分叉的）：
+
+- **分身**：在焦点分身旁边拆一个新格子，同一台主机、同一个目录、同一个 agent。面板通常是窄高的，所以默认上下拆。
+- **/fork**：`TerminalPane` 的 `onCommand` 记着当前输入行，在 claude 里敲 `/fork` 回车时截下这次回车、把已输入的字删掉，
+  然后开一个 `fork: true` 的分身；主进程给它加上 `--continue --fork-session`（只接受这一个固定开关，不接受任意参数）。
+- **跨主机目录**：`shared/hostpath.ts` 的 `mapPath` 在同一台电脑的 Windows 和 WSL 之间换算路径
+  （`/home/x` ⇄ `\\wsl.localhost\<发行版>\home\x`，`C:\x` ⇄ `/mnt/c/x`），服务器上的目录返回 null。
+- App 通过 `AgentPanelHandle`（focus / pty / split / closeFocused）拿到焦点分身，双击 cd、拖放、快捷键都作用在它上面。
+
 ### 设置和外观
 
 `settings.ts` 定义默认值（按 16 寸屏 150% 缩放：界面 14px、终端 15px）、内置渐变壁纸、强调色。设置写成 `:root` 上的

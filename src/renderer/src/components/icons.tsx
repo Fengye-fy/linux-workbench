@@ -68,6 +68,13 @@ export const TerminalIcon = () => (
   </svg>
 )
 
+/** 在资源管理器当前目录启动 */
+export const FolderIcon = () => (
+  <svg {...svg}>
+    <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.4 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" {...line} strokeWidth={1.3} />
+  </svg>
+)
+
 /** Windows 本机 */
 export const WindowsIcon = () => (
   <svg {...svg}>

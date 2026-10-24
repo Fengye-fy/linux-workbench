@@ -15,13 +15,16 @@ let nextId = 1
 
 export function createSession(
   registry: HostRegistry,
-  { hostId, cols, rows, cwd, agent }: PtyCreateOptions,
+  { hostId, cols, rows, cwd, agent, fork }: PtyCreateOptions,
   onData: (id: number, data: string) => void,
   onExit: (id: number, exitCode: number) => void
 ): number {
   if (agent !== undefined && !isAgentId(agent)) throw new Error(`未知的 agent：${agent}`)
+  if (fork && agent !== 'claude') throw new Error('只有 claude 支持分叉对话')
   const host = registry.get(hostId)
-  const shell = host.openShell({ cols, rows, cwd, agent })
+  // 分叉：接着这个目录里最近的对话，但另开一个新会话，原来的不受影响
+  const agentArgs = fork ? ['--continue', '--fork-session'] : undefined
+  const shell = host.openShell({ cols, rows, cwd, agent, agentArgs })
   const id = nextId++
   sessions.set(id, { host, shell })
   shell.onData((data) => onData(id, data))

@@ -38,6 +38,13 @@ interface Props {
   label?: string
   /** 设置后终端里跑的是这个 agent，拖入路径时插入 @相对路径 */
   agent?: AgentId
+  /** 只对 claude：分叉当前目录最近的对话启动 */
+  fork?: boolean
+  /**
+   * 用户在这个终端里敲完一行按回车时先问一下；返回 true 表示这行由界面处理（比如 /fork 开分身），
+   * 不发给程序，已经敲进去的字会被删掉
+   */
+  onCommand?: (line: string) => boolean
   focused: boolean
   /** 创建后立刻抢键盘焦点（agent 面板后台启动，不抢） */
   autoFocus?: boolean
@@ -144,8 +151,28 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
     const offExit = window.api.pty.onExit((pid) => {
       if (pid === id) callbacks.current.onExit()
     })
+    // 记下当前输入行，只为认出 /fork 这类界面命令；光标键、历史这些没法跟踪，遇到就清空重来
+    let line = ''
     const inputSub = term.onData((data) => {
-      if (id !== null) window.api.pty.write(id, data)
+      if (id === null) return
+      const onCommand = callbacks.current.onCommand
+      if (onCommand) {
+        if (data === '\r') {
+          const typed = line
+          line = ''
+          if (typed.trim() && onCommand(typed.trim())) {
+            window.api.pty.write(id, '\x7f'.repeat([...typed].length))
+            return
+          }
+        } else if (data === '\x7f' || data === '\b') {
+          line = [...line].slice(0, -1).join('')
+        } else if (/[\x00-\x1f]/.test(data)) {
+          line = ''
+        } else {
+          line += data
+        }
+      }
+      window.api.pty.write(id, data)
     })
     const resizeSub = term.onResize(({ cols, rows }) => {
       if (id !== null) window.api.pty.resize(id, cols, rows)
@@ -157,7 +184,7 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
     })
     ro.observe(hostRef.current!)
 
-    window.api.pty.create({ hostId, cols: term.cols, rows: term.rows, cwd, agent }).then((newId) => {
+    window.api.pty.create({ hostId, cols: term.cols, rows: term.rows, cwd, agent, fork: props.fork }).then((newId) => {
       // StrictMode 下 effect 会先卸载一次，创建回来时组件可能已经没了
       if (disposed) {
         window.api.pty.kill(newId)

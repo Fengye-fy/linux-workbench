@@ -16,6 +16,8 @@ const pathPrefixLine = (prefix?: string): string =>
 export interface LaunchOptions {
   cwd: string | null
   agent?: string
+  /** 跟在 agent 命令后面的参数（只会是代码里写死的几个开关，比如 --continue --fork-session） */
+  agentArgs?: readonly string[]
   pathPrefix?: string
   /**
    * 报完 pid 后清屏并清空滚动缓冲。WSL 用：wsl.exe 启动时打的警告留在 Windows ConPTY 自己的
@@ -29,14 +31,15 @@ export interface LaunchOptions {
  * 之后就能用这个 pid 读 /proc 拿当前目录和前台进程）。
  * 指定 agent 时在登录交互 shell 里启动它，退出后留在 shell 里。
  */
-export function shellLaunchScript({ cwd, agent, pathPrefix, clear }: LaunchOptions): string {
+export function shellLaunchScript({ cwd, agent, agentArgs = [], pathPrefix, clear }: LaunchOptions): string {
+  const command = [agent, ...agentArgs.map(shellQuote)].join(' ')
   return [
     `printf '\\033]7777;wb-pid=%s\\007' $$`,
     clear ? `printf '\\033[H\\033[2J\\033[3J'` : '',
     pathPrefixLine(pathPrefix),
     cwd ? `cd -- ${shellQuote(cwd)} 2>/dev/null || cd` : 'cd',
     LOGIN_SHELL,
-    agent ? `exec "$s" -ilc ${shellQuote(`${agent}; exec "$SHELL" -il`)}` : `exec "$s" -l`
+    agent ? `exec "$s" -ilc ${shellQuote(`${command}; exec "$SHELL" -il`)}` : `exec "$s" -l`
   ]
     .filter(Boolean)
     .join('\n')

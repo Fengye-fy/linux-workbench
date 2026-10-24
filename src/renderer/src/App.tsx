@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { AppEnv, DetectedAgent, HostInfo, SshHostDraft } from '../../shared/types'
-import { AgentPanel } from './components/AgentPanel'
+import { mapPath } from '../../shared/hostpath'
+import { AgentPanel, type AgentPanelHandle } from './components/AgentPanel'
 import { Explorer } from './components/Explorer'
 import { HostDialog } from './components/HostDialog'
 import { AgentIcon, CloseIcon, SplitIcon } from './components/icons'
@@ -59,8 +60,9 @@ export default function App() {
   const [agentWidth, setAgentWidth] = useState(() => load('agent.width', 440))
   const [agentFocused, setAgentFocused] = useState(false)
   const [agentCwd, setAgentCwd] = useState<string | null>(null)
-  const agentPty = useRef<number | null>(null)
-  const agentHandle = useRef<TerminalHandle>(null)
+  /** agent 的启动目录；null 表示用 agent 所在主机的资源管理器根目录 */
+  const [agentDir, setAgentDir] = useState<string | null>(null)
+  const agentPanel = useRef<AgentPanelHandle>(null)
 
   const hostById = (id: string | null): HostInfo | null => hosts.find((h) => h.id === id) ?? null
   const tileHostId = ws.focused ? (paneInfo.current.get(ws.focused)?.hostId ?? null) : null
@@ -221,7 +223,7 @@ export default function App() {
     setAgentVisible(show)
     save('agent.visible', show)
     // 面板这一帧才显示出来，下一帧再给终端焦点
-    if (show) requestAnimationFrame(() => agentHandle.current?.focus())
+    if (show) requestAnimationFrame(() => agentPanel.current?.focus())
     else focusTile()
   }
 
@@ -229,7 +231,29 @@ export default function App() {
 
   const selectAgentHost = (id: string): void => {
     setAgentHostId(id)
+    setAgentDir(null)
     save('agent.host', id)
+    setAgentRun((r) => r + 1)
+  }
+
+  /**
+   * agent 换到资源管理器当前所在的目录重新启动。目录在别的主机上时换算路径：
+   * WSL 的目录给 Windows 上的 agent 用就是 \\wsl.localhost\…；服务器上的目录别处打不开
+   */
+  const useExplorerDirForAgent = (): void => {
+    const from = currentHost
+    const dir = from ? roots[from.id] : null
+    if (!from || !agentHost || !dir) return
+    const mapped = mapPath(dir, from, agentHost)
+    if (!mapped) {
+      setNotice(
+        from.kind === 'ssh'
+          ? `${agentHost.name}上的 agent 打不开服务器上的目录：在 ${from.name} 上装好 agent，再把 agent 切到那台服务器`
+          : `${agentHost.name}上的 agent 打不开 ${from.name} 上的目录`
+      )
+      return
+    }
+    setAgentDir(mapped)
     setAgentRun((r) => r + 1)
   }
 
@@ -295,7 +319,7 @@ export default function App() {
   /** 当前焦点终端：agent 或平铺区里的焦点窗格 */
   const target = (): { pty?: number; handle?: TerminalHandle | null } =>
     agentFocused
-      ? { pty: agentPty.current ?? undefined, handle: agentHandle.current }
+      ? { pty: agentPanel.current?.pty() ?? undefined, handle: agentPanel.current }
       : ws.focused
         ? { pty: ptyIds.current.get(ws.focused), handle: handles.current.get(ws.focused) }
         : {}
@@ -327,9 +351,12 @@ export default function App() {
   // 在捕获阶段拦截快捷键，抢在 xterm 之前，不让按键发进 shell
   const shortcuts = useRef<Record<string, () => void>>({})
   shortcuts.current = {
-    'ctrl+shift+Enter': () => split(ws.focused),
+    // 焦点在 agent 面板时，拆分 / 关闭作用在 agent 分身上
+    'ctrl+shift+Enter': () => (agentFocused ? agentPanel.current?.split() : split(ws.focused)),
     // agent 面板上按关闭只是隐藏，会话保留
-    'ctrl+shift+KeyW': () => (agentFocused ? toggleAgent(false) : ws.focused && close(ws.focused)),
+    // 最后一个 agent 分身上按关闭只是隐藏面板，会话保留
+    'ctrl+shift+KeyW': () =>
+      agentFocused ? agentPanel.current?.closeFocused() || toggleAgent(false) : ws.focused && close(ws.focused),
     'ctrl+shift+KeyA': () => toggleAgent(),
     'ctrl+Comma': () => setSettingsOpen((o) => !o),
     'ctrl+Equal': () => bumpFont(1),
@@ -465,26 +492,25 @@ export default function App() {
           )}
         </main>
         <AgentPanel
+          ref={agentPanel}
           host={agentHost}
           hosts={hosts}
           onSelectHost={selectAgentHost}
           agents={agents}
-          cwd={agentHostId ? (roots[agentHostId] ?? null) : null}
+          cwd={agentDir ?? (agentHostId ? (roots[agentHostId] ?? null) : null)}
           home={agentHostId ? (homes[agentHostId] ?? null) : null}
           visible={agentVisible}
           width={agentWidth}
           focused={agentFocused}
           run={agentRun}
           options={termOptions}
-          terminalRef={agentHandle}
           onResize={resizeAgent}
           onHide={() => toggleAgent(false)}
           onRestart={restartAgent}
+          onUseExplorerDir={useExplorerDirForAgent}
           onFocus={() => setAgentFocused(true)}
-          onReady={(pty) => {
-            agentPty.current = pty
-          }}
           onCwdChange={setAgentCwd}
+          onNotice={setNotice}
         />
         {!agentVisible && (
           <button className="agent-rail glass" title="显示 agent（Ctrl+Shift+A）" onClick={() => toggleAgent(true)}>

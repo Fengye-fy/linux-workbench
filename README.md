@@ -46,6 +46,7 @@
 | 新建终端（拆分焦点终端） | `Ctrl+Shift+Enter`，或标题栏的拆分按钮 |
 | 关闭终端 | `Ctrl+Shift+W`、标题栏的 ×，或在 shell 里 `exit` |
 | 显示 / 隐藏 agent 面板 | `Ctrl+Shift+A` |
+| agent 分身 / 分叉对话 | 焦点在 agent 上时 `Ctrl+Shift+Enter` 或标题栏的分身按钮；在 claude 里输入 `/fork` |
 | 设置 | `Ctrl+,`，或标题栏右侧的按钮 |
 | 终端字号 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` |
 | 复制 / 粘贴 | 有选中内容时 `Ctrl+C` 复制，`Ctrl+V` 粘贴（和 Windows Terminal 一样） |
@@ -55,7 +56,11 @@
 - 拆分沿较长的边对半切，新终端在同一台主机、继承当前目录
 - 双击文件夹让焦点终端 `cd` 过去；终端前台有程序（vim、`ros2 launch`、agent…）时不打字，只提示
 - 终端标题和资源管理器高亮跟随终端的实际目录
-- agent 面板标题栏可以选它跑在哪台主机上（WSL、本机、服务器），在登录 shell 里启动，环境和平时开终端一样；拖进 agent 插入 `@相对路径`
+- agent 面板顶部可以选它跑在哪台主机上（WSL、本机、服务器），在登录 shell 里启动，环境和平时开终端一样；拖进 agent 插入 `@相对路径`
+- agent 面板里也是平铺的：分身把焦点分身的位置一分为二；在 claude 里输入 `/fork` 回车，会新开一个分身运行
+  `claude --continue --fork-session`，接着当前对话往下走，原来的分身不受影响
+- 面板顶部的文件夹按钮让 agent 换到资源管理器当前的目录启动：WSL 的目录给本机的 agent 用会换成 `\\wsl.localhost\…`；
+  服务器上的目录别的主机打不开，要在服务器上装 agent 并把 agent 切过去
 
 ## 设置
 
@@ -112,5 +117,6 @@ scripts/                冒烟测试、SSH 测试服务器、图标生成
 ## 已知限制
 
 - WSL 和服务器上需要有 `sh`、`getent`、`base64` 和 `/proc`（主流发行版都有）；登录 shell 是 fish 时检测不到 agent
+- 本机的 agent 打开 WSL 目录时，读写文件没问题，但它执行的命令跑在 Windows 上；要用 Linux 工具链（make、ros2…）就让 agent 跑在 WSL 里
 - Windows 本机的资源管理器不能跨盘符切换（从 C:\ 到 D:\），可以在终端里 `Set-Location D:\`
 - 资源管理器不会自动刷新，用标题上的刷新按钮

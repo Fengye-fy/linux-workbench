@@ -25,6 +25,7 @@ export interface ShellOptions {
   rows: number
   cwd: string | null
   agent?: string
+  agentArgs?: readonly string[]
 }
 
 export interface ExecResult {

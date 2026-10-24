@@ -13,6 +13,7 @@ export const encodeCommand = (script: string): string => Buffer.from(script, 'ut
 export interface PsLaunchOptions {
   cwd: string | null
   agent?: string
+  agentArgs?: readonly string[]
   pathPrefix?: string
 }
 
@@ -20,7 +21,8 @@ export interface PsLaunchOptions {
  * 交互 PowerShell 的启动脚本（配合 -NoExit）：输出改成 UTF-8；包一层用户原来的 prompt，
  * 前面加上报告当前目录的 OSC 序列；进入目录；指定了 agent 就直接运行，退出后留在 PowerShell 里。
  */
-export function psLaunchScript({ cwd, agent, pathPrefix }: PsLaunchOptions): string {
+export function psLaunchScript({ cwd, agent, agentArgs = [], pathPrefix }: PsLaunchOptions): string {
+  const call = (target: string): string => ['&', target, ...agentArgs.map(psString)].join(' ')
   return [
     '[Console]::InputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()',
     pathPrefix ? `$env:Path = ${psString(pathPrefix)} + ';' + $env:Path` : '',
@@ -29,7 +31,7 @@ export function psLaunchScript({ cwd, agent, pathPrefix }: PsLaunchOptions): str
     `Set-Location -LiteralPath ${cwd ? psString(cwd) : '$HOME'} -ErrorAction SilentlyContinue`,
     // 只找可执行程序（exe / cmd），不走 .ps1，免得被执行策略拦住
     agent
-      ? `$c = Get-Command ${agent} -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { & $c.Source } else { & ${agent} }`
+      ? `$c = Get-Command ${agent} -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { ${call('$c.Source')} } else { ${call(agent)} }`
       : ''
   ]
     .filter(Boolean)

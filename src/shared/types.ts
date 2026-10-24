@@ -62,6 +62,8 @@ export interface PtyCreateOptions {
   cwd: string | null
   /** 设置后在登录 shell 里启动这个 agent，退出后留在 shell 里 */
   agent?: AgentId
+  /** 只对 claude：分叉当前目录最近的对话（claude --continue --fork-session） */
+  fork?: boolean
 }
 
 export interface DetectedAgent {

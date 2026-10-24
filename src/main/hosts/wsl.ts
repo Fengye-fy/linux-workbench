@@ -43,8 +43,8 @@ export class WslHost implements Host {
     return { id: `wsl:${this.distro}`, kind: 'wsl', name: this.distro, detail: 'WSL', status: 'connected' }
   }
 
-  openShell({ cols, rows, cwd, agent }: ShellOptions): ShellHandle {
-    const env = wslEnv(shellLaunchScript({ cwd, agent, pathPrefix: testPathPrefix(), clear: true }), {
+  openShell({ cols, rows, cwd, agent, agentArgs }: ShellOptions): ShellHandle {
+    const env = wslEnv(shellLaunchScript({ cwd, agent, agentArgs, pathPrefix: testPathPrefix(), clear: true }), {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor'
     })
