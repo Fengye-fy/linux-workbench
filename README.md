@@ -3,6 +3,9 @@
 在 Windows 上管理各种 Linux 的终端工作台：本机的 WSL 发行版、远程的云服务器、Windows 本机的 PowerShell，
 都在一个窗口里——左边资源管理器，中间平铺终端，右边 agent CLI（Claude Code / Codex / Gemini）。
 
+> **作者**：这个软件的代码、文档和测试由 **Claude**（Anthropic 开发的 AI 助手）编写。
+> [Fengye-fy](https://github.com/Fengye-fy) 提出想法和需求、负责测试，并在这里发布。
+
 架构和设计取舍见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ![主界面：WSL 和 Windows 本机的终端平铺在一起](docs/screenshots/main.png)

@@ -1,9 +1,12 @@
 {
   "name": "linux-workbench",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "管理 WSL 和远程 Linux 服务器的终端工作台：资源管理器 + 平铺终端 + agent CLI",
-  "author": "Fengye-fy",
+  "author": "Claude (AI)",
+  "contributors": [
+    "Fengye-fy（提出想法和需求、测试、发布）"
+  ],
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
