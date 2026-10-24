@@ -1,0 +1,2 @@
+# 代码要在 Linux / WSL 里跑，工作区统一用 LF，不受 Windows 上 core.autocrlf 的影响
+* text=auto eol=lf

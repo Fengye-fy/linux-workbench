@@ -1,0 +1,490 @@
+:root {
+  --bg: #1e1e1e;
+  --panel: #181818;
+  --border: #2b2b2b;
+  --text: #cccccc;
+  --muted: #8b8b8b;
+  --hover: #2a2d2e;
+  --active: #04395e;
+  --focus: #264f78;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) auto;
+  height: 100%;
+}
+
+/* 资源管理器 */
+.explorer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
+.explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px 10px;
+}
+
+.explorer-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.explorer-root {
+  margin: 0 6px 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: 8px;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+
+.tree-row:hover,
+.explorer-root:hover {
+  background: var(--hover);
+}
+
+.tree-row.active,
+.explorer-root.active {
+  background: var(--active);
+  color: var(--text);
+}
+
+.tree-row .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 用边框画箭头，不依赖字体里有没有 › 这个字符 */
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.tree-row.dir .chevron::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateX(-1px) rotate(-45deg);
+}
+
+.chevron.open {
+  transform: rotate(90deg);
+}
+
+.tree-msg {
+  height: 22px;
+  line-height: 22px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* 平铺区：容器和每个格子各留 3px，边缘和窗格之间都是 6px 间距 */
+.terminal-area {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 3px;
+}
+
+.tiles {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tile,
+.divider {
+  position: absolute;
+  transition:
+    left 0.22s var(--ease),
+    top 0.22s var(--ease),
+    width 0.22s var(--ease),
+    height 0.22s var(--ease);
+}
+
+.tile {
+  display: flex;
+  padding: 3px;
+  animation: tile-in 0.2s var(--ease);
+}
+
+/* 拖动时跟手，不要过渡 */
+.tiles.dragging .tile,
+.tiles.dragging .divider {
+  transition: none;
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.divider {
+  z-index: 1;
+}
+
+.divider.row {
+  width: 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+}
+
+.divider.column {
+  height: 6px;
+  margin-top: -3px;
+  cursor: row-resize;
+}
+
+.divider::after {
+  content: '';
+  position: absolute;
+  background: var(--focus);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.divider.row::after {
+  inset: 3px 2px;
+}
+
+.divider.column::after {
+  inset: 2px 3px;
+}
+
+.divider:hover::after,
+.tiles.dragging .divider:active::after {
+  opacity: 1;
+  transition-delay: 0.1s;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--focus);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 终端 */
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+  transition: border-color 0.15s ease;
+}
+
+/* 用 class 而不是 :focus-within：点资源管理器时终端失去键盘焦点，但它仍是 cd 的目标 */
+.pane.focused {
+  border-color: var(--focus);
+}
+
+.pane.dropping {
+  border-color: #3b82f6;
+  box-shadow: inset 0 0 0 1px #3b82f6;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font: 12px monospace;
+  user-select: none;
+}
+
+.pane-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pane:hover .pane-actions,
+.pane.focused .pane-actions {
+  opacity: 1;
+}
+
+.icon-btn.small {
+  width: 20px;
+  height: 20px;
+}
+
+/* padding 放在外层：FitAddon 按 term-host 的尺寸算行列，host 自己不能有 padding */
+.pane-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  padding: 4px 0 0 8px;
+}
+
+.term-host {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* agent 面板：和平铺区之间也是 6px 间距，拖动条就放在这条缝里 */
+.agent-panel {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  padding: 6px 6px 6px 0;
+}
+
+.agent-panel[hidden] {
+  display: none;
+}
+
+.agent-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 6px;
+  z-index: 2;
+  cursor: col-resize;
+}
+
+.agent-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 6px 2px;
+  background: var(--focus);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.agent-resizer:hover::after {
+  opacity: 1;
+  transition-delay: 0.1s;
+}
+
+.agent-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.agent-empty h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.agent-empty p {
+  margin: 0;
+}
+
+.install-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.install-list > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.install-list code {
+  font-family: monospace;
+  color: var(--text);
+  user-select: text;
+  word-break: break-all;
+}
+
+.agent-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-rail {
+  display: flex;
+  justify-content: center;
+  width: 28px;
+  padding: 12px 0 0;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.agent-rail:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* 标题栏里切换 agent 的分段按钮 */
+.seg {
+  display: inline-flex;
+  margin-right: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  padding: 1px 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: 11px monospace;
+  cursor: pointer;
+}
+
+.seg-btn:hover {
+  color: var(--text);
+}
+
+.seg-btn.on {
+  background: var(--active);
+  color: var(--text);
+}
+
+.notice {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  padding: 6px 10px;
+  border: 1px solid #6b5212;
+  border-radius: 6px;
+  background: #3a2d0f;
+  color: #f2d48a;
+  animation: notice-in 0.15s ease;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
