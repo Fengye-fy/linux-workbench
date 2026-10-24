@@ -9,8 +9,19 @@ function subscribe<A extends unknown[]>(channel: string, cb: (...args: A) => voi
 
 const api: WorkbenchApi = {
   env: () => ipcRenderer.invoke('app:env'),
-  listDir: (dir) => ipcRenderer.invoke('fs:list', dir),
-  detectAgents: () => ipcRenderer.invoke('agents:detect'),
+  hosts: {
+    list: () => ipcRenderer.invoke('hosts:list'),
+    saveSsh: (draft) => ipcRenderer.invoke('hosts:saveSsh', draft),
+    remove: (id) => ipcRenderer.invoke('hosts:remove', id),
+    sshConfigSuggestions: () => ipcRenderer.invoke('hosts:sshConfigSuggestions'),
+    sshConfig: (id) => ipcRenderer.invoke('hosts:sshConfig', id),
+    keyCandidates: () => ipcRenderer.invoke('hosts:keyCandidates'),
+    forgetPassword: (id) => ipcRenderer.invoke('hosts:forgetPassword', id),
+    home: (id) => ipcRenderer.invoke('hosts:home', id),
+    onStatus: (cb) => subscribe('hosts:status', cb)
+  },
+  listDir: (hostId, dir) => ipcRenderer.invoke('fs:list', hostId, dir),
+  detectAgents: (hostId) => ipcRenderer.invoke('agents:detect', hostId),
   pty: {
     create: (opts) => ipcRenderer.invoke('pty:create', opts),
     write: (id, data) => ipcRenderer.send('pty:write', id, data),
@@ -20,6 +31,11 @@ const api: WorkbenchApi = {
     cwd: (id) => ipcRenderer.invoke('pty:cwd', id),
     onData: (cb) => subscribe('pty:data', cb),
     onExit: (cb) => subscribe('pty:exit', cb)
+  },
+  wallpaper: {
+    choose: () => ipcRenderer.invoke('wallpaper:choose'),
+    current: () => ipcRenderer.invoke('wallpaper:current'),
+    clear: () => ipcRenderer.invoke('wallpaper:clear')
   }
 }
 

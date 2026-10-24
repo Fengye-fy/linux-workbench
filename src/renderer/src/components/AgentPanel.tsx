@@ -1,23 +1,32 @@
-import { useState, type PointerEvent as ReactPointerEvent, type Ref } from 'react'
+import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react'
 import { AGENTS, type AgentId } from '../../../shared/agents'
-import type { DetectedAgent } from '../../../shared/types'
+import type { DetectedAgent, HostInfo } from '../../../shared/types'
 import { load, save } from '../storage'
 import { HideIcon, RestartIcon } from './icons'
-import { TerminalPane, type TerminalHandle } from './TerminalPane'
+import { TerminalPane, type TermOptions, type TerminalHandle } from './TerminalPane'
 
 interface Props {
-  /** null 表示还在检测 */
-  agents: DetectedAgent[] | null
-  /** agent 启动时所在目录（资源管理器的根目录） */
-  cwd: string
-  home: string
+  /** agent 跑在哪台主机上 */
+  host: HostInfo | null
+  /** 可选的主机，换主机会在那台主机上重新检测、启动 */
+  hosts: HostInfo[]
+  onSelectHost: (id: string) => void
+  /** null 表示还在检测；'offline' 表示 SSH 主机没连上，没法检测 */
+  agents: DetectedAgent[] | null | 'offline'
+  /** agent 启动时所在目录 */
+  cwd: string | null
+  home: string | null
   visible: boolean
   width: number
   focused: boolean
+  /** 每次重启加 1，和主机、agent 一起作为终端的 key */
+  run: number
+  options: TermOptions
   terminalRef: Ref<TerminalHandle>
   onResize: (width: number) => void
   onHide: () => void
-  onRedetect: () => void
+  /** 重新检测并启动 */
+  onRestart: () => void
   onFocus: () => void
   onReady: (pty: number) => void
   onCwdChange: (cwd: string) => void
@@ -28,21 +37,19 @@ interface Props {
  * 隐藏时只是不显示，终端和会话都还在；切换 agent 或重启才会结束当前进程。
  */
 export function AgentPanel(props: Props) {
-  const { agents, cwd, home, visible, width, focused, terminalRef, onResize, onHide, onRedetect } = props
+  const { host, hosts, agents, cwd, home, visible, width, focused, run, options, terminalRef, onResize, onHide, onRestart } =
+    props
   const [chosen, setChosen] = useState<AgentId | null>(() => load('agent.selected', null))
-  // 每次重启加 1，作为终端的 key 让它重新挂载
-  const [run, setRun] = useState(0)
   const [exited, setExited] = useState(false)
-  const agent = agents?.find((a) => a.id === chosen) ?? agents?.[0] ?? null
+  const list = Array.isArray(agents) ? agents : []
+  const agent = list.find((a) => a.id === chosen) ?? list[0] ?? null
+
+  useEffect(() => setExited(false), [run, host?.id])
 
   const choose = (id: AgentId): void => {
     setChosen(id)
     save('agent.selected', id)
     setExited(false)
-  }
-  const restart = (): void => {
-    setExited(false)
-    setRun((r) => r + 1)
   }
 
   // 拖左边缘调宽度，往左拖变宽
@@ -69,14 +76,49 @@ export function AgentPanel(props: Props) {
     </button>
   )
 
+  const hostSelect = (
+    <select
+      className="agent-host"
+      value={host?.id ?? ''}
+      title="agent 运行在哪台主机上"
+      onChange={(e) => props.onSelectHost(e.target.value)}
+    >
+      {hosts.map((h) => (
+        <option key={h.id} value={h.id}>
+          {h.name}
+        </option>
+      ))}
+    </select>
+  )
+
+  const empty = (title: string, text: ReactNode, retry = '重新检测') => (
+    <div className="agent-empty glass">
+      {hosts.length > 0 && <div className="agent-host-row">运行在 {hostSelect}</div>}
+      <h3>{title}</h3>
+      {text}
+      <div className="agent-empty-actions">
+        <button className="btn" onClick={onRestart}>
+          {retry}
+        </button>
+        <button className="btn ghost" onClick={onHide}>
+          隐藏
+        </button>
+      </div>
+    </div>
+  )
+
   let content
-  if (!agents) {
-    content = <div className="agent-empty">正在检测 agent CLI…</div>
+  if (!host) {
+    content = empty('还没有可用的主机', <p>添加一台服务器后，agent 会在那台主机上运行。</p>)
+  } else if (agents === null) {
+    content = <div className="agent-empty glass">正在 {host.name} 上检测 agent CLI…</div>
+  } else if (agents === 'offline') {
+    content = empty(`还没连接 ${host.name}`, <p>先在终端里登录这台服务器，再点"重新检测"。</p>)
   } else if (!agent) {
-    content = (
-      <div className="agent-empty">
-        <h3>没有检测到 agent CLI</h3>
-        <p>装好下面任意一个，再点"重新检测"：</p>
+    content = empty(
+      `${host.name} 上没有 agent CLI`,
+      <>
+        <p>在这台主机上装好下面任意一个，再点"重新检测"：</p>
         <div className="install-list">
           {AGENTS.map((a) => (
             <div key={a.id}>
@@ -85,47 +127,34 @@ export function AgentPanel(props: Props) {
             </div>
           ))}
         </div>
-        <div className="agent-empty-actions">
-          <button className="btn" onClick={onRedetect}>
-            重新检测
-          </button>
-          <button className="btn" onClick={onHide}>
-            隐藏
-          </button>
-        </div>
-      </div>
+      </>
     )
   } else if (exited) {
-    content = (
-      <div className="agent-empty">
-        <h3>{agent.id} 已退出</h3>
-        <div className="agent-empty-actions">
-          <button className="btn" onClick={restart}>
-            重新启动
-          </button>
-          {hideButton}
-        </div>
-      </div>
-    )
+    content = empty(`${agent.id} 已退出`, null, '重新启动')
   } else {
     content = (
       <TerminalPane
-        key={`${agent.id}-${run}`}
+        key={`${host.id}-${agent.id}-${run}`}
         ref={terminalRef}
+        hostId={host.id}
+        hostName={host.name}
+        flavor={host.kind === 'windows' ? 'powershell' : 'posix'}
         cwd={cwd}
         home={home}
         label={agent.id}
         agent={agent.id}
         focused={focused}
+        options={options}
         onReady={props.onReady}
         onCwdChange={props.onCwdChange}
         onFocus={props.onFocus}
         onExit={() => setExited(true)}
         actions={
           <>
-            {agents.length > 1 && (
+            {hostSelect}
+            {list.length > 1 && (
               <span className="seg">
-                {agents.map((a) => (
+                {list.map((a) => (
                   <button
                     key={a.id}
                     className={`seg-btn${a.id === agent.id ? ' on' : ''}`}
@@ -137,7 +166,7 @@ export function AgentPanel(props: Props) {
                 ))}
               </span>
             )}
-            <button className="icon-btn small" title="重新启动" onClick={restart}>
+            <button className="icon-btn small" title="重新启动" onClick={onRestart}>
               <RestartIcon />
             </button>
             {hideButton}

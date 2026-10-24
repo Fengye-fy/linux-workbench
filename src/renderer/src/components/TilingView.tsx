@@ -1,4 +1,12 @@
-import { useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import {
   computeLayout,
   MIN_PANE_HEIGHT,
@@ -14,6 +22,9 @@ interface Props {
   onRatioChange: (splitId: string, ratio: number) => void
   renderPane: (id: string) => ReactNode
 }
+
+/** 关闭的窗格留一个空壳做退场动画，时长和 CSS 里的 tile-out 一致 */
+const LEAVE_MS = 220
 
 const pct = (v: number): string => `${v * 100}%`
 
@@ -31,6 +42,17 @@ const dividerStyle = ({ dir, rect: r, ratio }: Divider) =>
 export function TilingView({ layout, containerRef, onRatioChange, renderPane }: Props) {
   const { panes, dividers } = useMemo(() => computeLayout(layout), [layout])
   const [dragging, setDragging] = useState(false)
+  const [leaving, setLeaving] = useState<{ id: string; rect: Rect }[]>([])
+  const prev = useRef(panes)
+
+  useEffect(() => {
+    const gone = [...prev.current].filter(([id]) => !panes.has(id)).map(([id, rect]) => ({ id, rect }))
+    prev.current = panes
+    if (!gone.length) return
+    setLeaving((l) => [...l, ...gone])
+    // 不在 cleanup 里取消：动画期间布局再变，这批空壳也要按时移除
+    window.setTimeout(() => setLeaving((l) => l.filter((x) => !gone.includes(x))), LEAVE_MS)
+  }, [panes])
 
   const startDrag = (e: ReactPointerEvent<HTMLDivElement>, d: Divider): void => {
     const box = containerRef.current?.getBoundingClientRect()
@@ -64,6 +86,11 @@ export function TilingView({ layout, containerRef, onRatioChange, renderPane }: 
       {[...panes].map(([id, r]) => (
         <div key={id} className="tile" style={tileStyle(r)}>
           {renderPane(id)}
+        </div>
+      ))}
+      {leaving.map(({ id, rect }) => (
+        <div key={`leaving-${id}`} className="tile leaving" style={tileStyle(rect)} aria-hidden="true">
+          <div className="pane glass" />
         </div>
       ))}
       {dividers.map((d) => (
